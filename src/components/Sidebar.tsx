@@ -2,9 +2,9 @@ import {
   Users, 
   UserPlus, 
   LayoutDashboard, 
-  ClipboardList, 
   Settings,
-  Milk
+  Milk,
+  ClipboardList
 } from 'lucide-react';
 import { ViewMode } from '../types';
 
@@ -47,7 +47,7 @@ export default function Sidebar({ currentView, setCurrentView, sidebarOpen }: Si
           {menuItems.map((item) => (
             <li key={item.id}>
               <button
-                onClick={() => setCurrentView(item.id === 'dashboard' ? 'list' : item.id)}
+                onClick={() => setCurrentView(item.id)}
                 className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
                   currentView === item.id
                     ? 'bg-white/15 text-white shadow-lg'
@@ -63,12 +63,23 @@ export default function Sidebar({ currentView, setCurrentView, sidebarOpen }: Si
 
         <div className="mt-8 px-3">
           <p className="px-3 text-xs font-semibold text-blue-300 uppercase tracking-wider mb-3">
-            Settings
+            System
           </p>
-          <button className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-blue-100 hover:bg-white/10 hover:text-white transition-all duration-200">
-            <Settings className="w-5 h-5" />
-            Configuration
-          </button>
+          <ul className="space-y-1">
+            <li>
+              <button
+                onClick={() => setCurrentView('config')}
+                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 ${
+                  currentView === 'config'
+                    ? 'bg-white/15 text-white shadow-lg'
+                    : 'text-blue-100 hover:bg-white/10 hover:text-white'
+                }`}
+              >
+                <Settings className="w-5 h-5" />
+                Configuration
+              </button>
+            </li>
+          </ul>
         </div>
       </nav>
 
