@@ -5,12 +5,14 @@ import {
   Save,
   ArrowLeft,
   Camera,
-  X,
   User,
   Calendar,
   PawPrint,
   CreditCard,
   Building2,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
 
 interface MemberFormProps {
@@ -18,6 +20,17 @@ interface MemberFormProps {
   editingMember: Member | null;
   setCurrentView: (view: ViewMode) => void;
   setEditingMember: (member: Member | null) => void;
+}
+
+interface IFSCData {
+  BANK: string;
+  BRANCH: string;
+  ADDRESS?: string;
+  CITY?: string;
+  STATE?: string;
+  CONTACT?: string;
+  IFSC: string;
+  MICR?: string;
 }
 
 export default function MemberForm({ mode, editingMember, setCurrentView, setEditingMember }: MemberFormProps) {
@@ -42,6 +55,9 @@ export default function MemberForm({ mode, editingMember, setCurrentView, setEdi
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [success, setSuccess] = useState(false);
+  const [ifscLoading, setIfscLoading] = useState(false);
+  const [ifscStatus, setIfscStatus] = useState<'idle' | 'success' | 'error'>('idle');
+  const [ifscMessage, setIfscMessage] = useState('');
 
   const handleChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
@@ -58,6 +74,46 @@ export default function MemberForm({ mode, editingMember, setCurrentView, setEdi
         setFormData((prev) => ({ ...prev, photo: reader.result as string }));
       };
       reader.readAsDataURL(file);
+    }
+  };
+
+  // IFSC Code Auto-fetch
+  const handleIFSCBlur = async () => {
+    const code = formData.ifscCode.trim().toUpperCase();
+    if (code.length < 4) {
+      setIfscStatus('idle');
+      return;
+    }
+
+    setIfscLoading(true);
+    setIfscStatus('idle');
+    setIfscMessage('');
+
+    try {
+      const response = await fetch(`https://ifsc.razorpay.com/${code}`);
+      
+      if (!response.ok) {
+        throw new Error('Invalid IFSC code');
+      }
+
+      const data: IFSCData = await response.json();
+      
+      if (data && data.BANK) {
+        setFormData((prev) => ({
+          ...prev,
+          bankName: data.BANK,
+          branchName: data.BRANCH || '',
+        }));
+        setIfscStatus('success');
+        setIfscMessage(`Found: ${data.BANK} - ${data.BRANCH}`);
+      } else {
+        throw new Error('No data found for this IFSC');
+      }
+    } catch (error) {
+      setIfscStatus('error');
+      setIfscMessage('Invalid IFSC code. Please enter manually.');
+    } finally {
+      setIfscLoading(false);
     }
   };
 
@@ -348,6 +404,9 @@ export default function MemberForm({ mode, editingMember, setCurrentView, setEdi
           <div className="flex items-center gap-2 mb-4">
             <Building2 className="w-5 h-5 text-blue-600" />
             <h3 className="text-sm font-semibold text-gray-700 uppercase">Bank Details</h3>
+            <span className="ml-auto text-xs text-blue-600 bg-blue-50 px-2 py-1 rounded-full">
+              💡 Enter IFSC to auto-fill bank details
+            </span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -389,16 +448,34 @@ export default function MemberForm({ mode, editingMember, setCurrentView, setEdi
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
                 IFSC Code <span className="text-red-500">*</span>
+                <span className="ml-2 text-xs text-blue-600 font-normal">(auto-fetches bank details)</span>
               </label>
-              <input
-                type="text"
-                value={formData.ifscCode}
-                onChange={(e) => handleChange('ifscCode', e.target.value.toUpperCase())}
-                placeholder="e.g., SBIN0001234"
-                className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
-                  errors.ifscCode ? 'border-red-500' : 'border-gray-300'
-                }`}
-              />
+              <div className="relative">
+                <input
+                  type="text"
+                  value={formData.ifscCode}
+                  onChange={(e) => {
+                    handleChange('ifscCode', e.target.value.toUpperCase());
+                    setIfscStatus('idle');
+                    setIfscMessage('');
+                  }}
+                  onBlur={handleIFSCBlur}
+                  placeholder="e.g., SBIN0001234"
+                  className={`w-full px-3 py-2 pr-10 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
+                    errors.ifscCode ? 'border-red-500' : 'border-gray-300'
+                  }`}
+                />
+                <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                  {ifscLoading && <Loader2 className="w-4 h-4 text-blue-500 animate-spin" />}
+                  {ifscStatus === 'success' && <CheckCircle2 className="w-4 h-4 text-green-500" />}
+                  {ifscStatus === 'error' && <AlertCircle className="w-4 h-4 text-red-500" />}
+                </div>
+              </div>
+              {ifscMessage && (
+                <p className={`text-xs mt-1 ${ifscStatus === 'success' ? 'text-green-600' : 'text-red-500'}`}>
+                  {ifscMessage}
+                </p>
+              )}
               {errors.ifscCode && <p className="text-xs text-red-500 mt-1">{errors.ifscCode}</p>}
             </div>
 
@@ -410,7 +487,7 @@ export default function MemberForm({ mode, editingMember, setCurrentView, setEdi
                 type="text"
                 value={formData.branchName}
                 onChange={(e) => handleChange('branchName', e.target.value)}
-                placeholder="Enter branch name"
+                placeholder="Auto-filled from IFSC or enter manually"
                 className={`w-full px-3 py-2 border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 ${
                   errors.branchName ? 'border-red-500' : 'border-gray-300'
                 }`}

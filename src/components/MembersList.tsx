@@ -18,7 +18,6 @@ import {
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 
 interface MembersListProps {
   setCurrentView: (view: ViewMode) => void;
@@ -35,6 +34,7 @@ export default function MembersList({ setCurrentView, setEditingMember }: Member
   const [viewMember, setViewMember] = useState<Member | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [showFilters, setShowFilters] = useState(false);
+  const [exportLoading, setExportLoading] = useState(false);
   const itemsPerPage = 8;
 
   const filteredMembers = members.filter((member) => {
@@ -79,11 +79,14 @@ export default function MembersList({ setCurrentView, setEditingMember }: Member
     );
   };
 
-  const exportToExcel = () => {
-    const data = (selectedMembers.length > 0
+  const getExportData = () => {
+    return selectedMembers.length > 0
       ? members.filter((m) => selectedMembers.includes(m.id))
-      : filteredMembers
-    ).map((m) => ({
+      : filteredMembers;
+  };
+
+  const exportToExcel = () => {
+    const data = getExportData().map((m) => ({
       'Member Code': m.memberCode,
       'Registration Date': m.registrationDate,
       'Animal Type': m.animalType,
@@ -105,44 +108,102 @@ export default function MembersList({ setCurrentView, setEditingMember }: Member
   };
 
   const exportToPDF = () => {
-    const doc = new jsPDF();
-    const data = (selectedMembers.length > 0
-      ? members.filter((m) => selectedMembers.includes(m.id))
-      : filteredMembers
-    ).map((m) => [
-      m.memberCode,
-      m.registrationDate,
-      m.animalType,
-      m.gender,
-      `${m.firstName} ${m.surname}`,
-      m.aadharNumber,
-      m.mobileNumber,
-    ]);
+    setExportLoading(true);
+    
+    try {
+      const doc = new jsPDF('landscape');
+      const data = getExportData();
+      
+      // Title
+      doc.setFontSize(18);
+      doc.setTextColor(30, 64, 175);
+      doc.text('AAVIN Producer Management System', 14, 20);
+      
+      doc.setFontSize(12);
+      doc.setTextColor(100);
+      doc.text('Know Your Customer - Members Report', 14, 30);
+      
+      doc.setFontSize(9);
+      doc.setTextColor(150);
+      doc.text(`Generated on: ${new Date().toLocaleDateString()} | Total: ${data.length} members`, 14, 38);
 
-    // Title
-    doc.setFontSize(18);
-    doc.setTextColor(30, 64, 175);
-    doc.text('AAVIN Producer Management System', 14, 20);
-    doc.setFontSize(12);
-    doc.setTextColor(100);
-    doc.text('Know Your Customer - Members Report', 14, 30);
-    doc.setFontSize(9);
-    doc.text(`Generated on: ${new Date().toLocaleDateString()}`, 14, 37);
+      // Table Header
+      const startY = 48;
+      const colWidths = [22, 22, 18, 16, 40, 32, 24, 30, 30, 28, 30];
+      const headers = ['Code', 'Date', 'Animal', 'Gender', 'Name', 'Aadhar', 'Mobile', 'Bank', 'Account', 'IFSC', 'Branch'];
+      
+      // Draw header
+      doc.setFillColor(30, 64, 175);
+      doc.rect(14, startY - 5, 270, 8, 'F');
+      doc.setTextColor(255);
+      doc.setFontSize(8);
+      
+      let xPos = 14;
+      headers.forEach((header, i) => {
+        doc.text(header, xPos + 2, startY);
+        xPos += colWidths[i];
+      });
 
-    // Table
-    (doc as any).autoTable({
-      startY: 45,
-      head: [['Code', 'Reg. Date', 'Animal', 'Gender', 'Name', 'Aadhar', 'Mobile']],
-      body: data,
-      theme: 'grid',
-      headStyles: { fillColor: [30, 64, 175], textColor: 255 },
-      styles: { fontSize: 8 },
-    });
+      // Draw rows
+      doc.setTextColor(50);
+      doc.setFontSize(7);
+      let rowY = startY + 6;
+      
+      data.forEach((member, index) => {
+        if (rowY > 190) {
+          doc.addPage();
+          rowY = 20;
+        }
+        
+        // Alternating row color
+        if (index % 2 === 0) {
+          doc.setFillColor(245, 247, 250);
+          doc.rect(14, rowY - 4, 270, 7, 'F');
+        }
+        
+        xPos = 14;
+        const row = [
+          member.memberCode,
+          member.registrationDate,
+          member.animalType,
+          member.gender,
+          `${member.firstName} ${member.surname}`,
+          member.aadharNumber,
+          member.mobileNumber,
+          member.bankName.substring(0, 15),
+          member.accountNumber.substring(0, 14),
+          member.ifscCode,
+          member.branchName.substring(0, 15),
+        ];
+        
+        row.forEach((cell, i) => {
+          doc.text(cell || '', xPos + 2, rowY);
+          xPos += colWidths[i];
+        });
+        
+        rowY += 7;
+      });
 
-    doc.save('aavin_members.pdf');
+      // Footer
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(
+        `Page 1 | Aavin KYC System | ${new Date().toLocaleString()}`,
+        14,
+        doc.internal.pageSize.height - 10
+      );
+
+      doc.save('aavin_members_report.pdf');
+    } catch (error) {
+      console.error('PDF export error:', error);
+      alert('Error generating PDF. Please try again.');
+    } finally {
+      setExportLoading(false);
+    }
   };
 
   const handlePrint = () => {
+    const printData = getExportData();
     const printContent = `
       <html>
         <head>
@@ -178,10 +239,7 @@ export default function MembersList({ setCurrentView, setEditingMember }: Member
               </tr>
             </thead>
             <tbody>
-              ${(selectedMembers.length > 0
-                ? members.filter((m) => selectedMembers.includes(m.id))
-                : filteredMembers
-              )
+              ${printData
                 .map(
                   (m) => `
                 <tr>
@@ -203,9 +261,7 @@ export default function MembersList({ setCurrentView, setEditingMember }: Member
             </tbody>
           </table>
           <div class="footer">
-            <p>Total Members: ${
-              selectedMembers.length > 0 ? selectedMembers.length : filteredMembers.length
-            } | Generated: ${new Date().toLocaleString()}</p>
+            <p>Total Members: ${printData.length} | Generated: ${new Date().toLocaleString()}</p>
           </div>
         </body>
       </html>
@@ -265,11 +321,12 @@ export default function MembersList({ setCurrentView, setEditingMember }: Member
             </button>
             <button
               onClick={exportToPDF}
-              className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors"
+              disabled={exportLoading}
+              className="flex items-center gap-2 px-3 py-2 bg-red-600 text-white rounded-lg text-sm font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
               title="Export to PDF"
             >
               <FileText className="w-4 h-4" />
-              <span className="hidden sm:inline">PDF</span>
+              <span className="hidden sm:inline">{exportLoading ? '...' : 'PDF'}</span>
             </button>
             <button
               onClick={handlePrint}

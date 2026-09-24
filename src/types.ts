@@ -16,4 +16,4 @@ export interface Member {
   createdAt: string;
 }
 
-export type ViewMode = 'list' | 'add' | 'edit';
+export type ViewMode = 'dashboard' | 'list' | 'add' | 'edit' | 'config';
